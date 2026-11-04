@@ -1,0 +1,7 @@
+{
+  "volumeUsd": null,
+  "asOf": null,
+  "source": "https://github.com/hyliv-labs/private-perps-testing-zec-standard/blob/master/scripts/volume.ts",
+  "method": "Builder-fee earnings on the partner account, read from Lighter's public API, divided by the fee rate.",
+  "note": "Placeholder. No trades have settled through the partner account yet, so there is no volume to report. The daily job that writes this file is not built."
+}

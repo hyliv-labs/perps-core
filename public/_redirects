@@ -1,0 +1,4 @@
+# Path routing on a static host: unknown paths serve the app shell, which
+# then renders the right route. Netlify and Cloudflare Pages both read this
+# file as it is; Vercel and S3 want their own equivalent — see the README.
+/*  /index.html  200
