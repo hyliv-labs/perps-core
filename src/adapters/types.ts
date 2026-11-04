@@ -58,6 +58,23 @@ export interface NoirWalletAdapter {
    * Resolves when the user approves; the wallet broadcasts.
    */
   send(to: string, value: Amount, memo?: string): Promise<{ txid: string }>
+  /**
+   * The address of an already-connected wallet, without prompting.
+   *
+   * Null when nothing is connected. Optional, because the manual path has
+   * no connection to restore.
+   */
+  connectedAddress?(): Promise<ShieldedAddress | null>
+  /**
+   * The wallet's own transaction history, exactly as it hands it over.
+   *
+   * Deliberately `unknown`: no published source says what shape this has,
+   * so a type here would be a guess wearing a type's authority. Read it
+   * with `statusOf` from `./noir/history`, which works structurally.
+   *
+   * Optional, because the manual path has no wallet to ask.
+   */
+  history?(): Promise<unknown>
   /** Spendable shielded balance, for the amount picker. */
   balance(): Promise<Amount>
 }

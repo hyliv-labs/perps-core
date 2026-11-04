@@ -1,4 +1,4 @@
-import type { EvmAddress } from './types'
+import type { EvmAddress, ZcashNetwork } from './types'
 
 /**
  * What the browser build knows about the outside world.
@@ -51,6 +51,16 @@ export interface AppConfig {
   readonly bundlerUrl: string | undefined
   readonly paymasterAddress: EvmAddress | undefined
   readonly delegateAddress: EvmAddress | undefined
+  /**
+   * Which Zcash network this deployment is on. `main` unless set.
+   *
+   * It defaults to mainnet because that is the product, and because a
+   * deployment that silently believed it was on testnet would accept
+   * testnet addresses for real money. An unrecognised value is not
+   * interpreted — it is reported as a gap, since guessing which network was
+   * meant is the one thing worse than refusing.
+   */
+  readonly zcashNetwork: ZcashNetwork
   /**
    * Run the real adapters against the real venues with the privacy gate off.
    *
@@ -114,6 +124,7 @@ export function readConfig(): AppConfig {
     bundlerUrl: read('VITE_BUNDLER_URL'),
     paymasterAddress: address('VITE_PAYMASTER_ADDRESS'),
     delegateAddress: address('VITE_DELEGATE_ADDRESS'),
+    zcashNetwork: read('VITE_ZCASH_NETWORK') === 'test' ? 'test' : 'main',
     // The `DEV` conjunct is the whole safety property. Read it as: the flag
     // is only ever consulted when this is a dev server, never in a build.
     unsafeLiveTest: Boolean(import.meta.env.DEV) && read('VITE_UNSAFE_LIVE_TEST') === '1',
@@ -129,5 +140,11 @@ export function configGaps(config: AppConfig): readonly string[] {
   if (!config.bundlerUrl) gaps.push('VITE_BUNDLER_URL, so gas cannot be paid in USDC')
   if (!config.paymasterAddress) gaps.push('VITE_PAYMASTER_ADDRESS')
   if (!config.delegateAddress) gaps.push('VITE_DELEGATE_ADDRESS')
+  // Set, but to neither of the two words it can be. Saying so beats running
+  // on mainnet because someone wrote `testnet` and was not told.
+  const network = read('VITE_ZCASH_NETWORK')
+  if (network !== undefined && network !== 'main' && network !== 'test') {
+    gaps.push(`VITE_ZCASH_NETWORK is "${network}", which is neither "main" nor "test"`)
+  }
   return gaps
 }

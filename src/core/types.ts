@@ -14,6 +14,15 @@ export type Hex = Brand<string, 'Hex'>
 export type EvmAddress = Brand<string, 'EvmAddress'>
 /** A Zcash shielded (unified or orchard) address. Never a transparent one. */
 export type ShieldedAddress = Brand<string, 'ShieldedAddress'>
+/**
+ * Which Zcash network an address or a deployment belongs to.
+ *
+ * Carried explicitly rather than inferred, because the two are
+ * indistinguishable to everything downstream once an address is a string:
+ * a testnet address accepted by a mainnet deployment sends real ZEC nowhere
+ * recoverable, and the mistake looks exactly like success until it does not.
+ */
+export type ZcashNetwork = 'main' | 'test'
 /** Identifier of one trading session, stable across reloads. */
 export type SessionId = Brand<string, 'SessionId'>
 /** Deduplication key for an externally visible side effect. */

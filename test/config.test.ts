@@ -47,6 +47,32 @@ describe('pickRpc', () => {
   })
 })
 
+describe('which Zcash network the build is on', () => {
+  it('is mainnet unless the variable says exactly "test"', () => {
+    /*
+     * Mainnet is the default because it is the product, and because the
+     * failure modes are asymmetric: a mainnet build that believed it was on
+     * testnet would accept testnet addresses for real money, while a testnet
+     * build that believed it was on mainnet merely refuses everything.
+     */
+    const set = (import.meta.env as Record<string, string | undefined>).VITE_ZCASH_NETWORK
+    expect(readConfig().zcashNetwork).toBe(set === 'test' ? 'test' : 'main')
+  })
+
+  it('reports an unrecognised value as a gap instead of guessing', () => {
+    /*
+     * "testnet" is the word most people would reach for, and silently
+     * running on mainnet because of it is the exact accident this prevents.
+     * The source is checked because the gap depends on the raw variable
+     * rather than on the parsed config, which has already collapsed every
+     * unrecognised value to "main".
+     */
+    const source = readFileSync('src/core/config.ts', 'utf8')
+    expect(source).toContain("network !== 'main' && network !== 'test'")
+    expect(source).toContain('VITE_ZCASH_NETWORK is "')
+  })
+})
+
 describe('the live-test escape hatch', () => {
   /*
    * It turns the privacy gate into a warning so the real end-to-end path
@@ -85,8 +111,8 @@ describe('the live-test escape hatch', () => {
 
   // UNSKIP WHEN THE SESSION SCREEN LANDS. This guards a real safety
   // property and is only parked because the file it reads does not exist
-  // yet; the screen arrives with the session UI. Leaving it skipped past
-  // that point silently drops the guard.
+  // here yet; the screen arrives with the session UI. Leaving it skipped
+  // past that point silently drops the guard.
   it.skip('is the only thing that can widen the override beyond the mocks', () => {
     // If a second route to `canOverride` appears, this says so. The demo
     // override exists to be ticked against mocks; it must not become a
