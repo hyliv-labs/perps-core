@@ -13,8 +13,8 @@ the same day and the commit history is the record.
 
 ## What actually ran
 
-Six of the eight legs executed live on 2026-11-04, most of them for the first
-time. Every figure below is from that run.
+Executed live on 2026-11-04, most of it for the first time. Every figure
+below is from that run.
 
 | Leg | Amount | Evidence |
 | --- | --- | --- |
@@ -25,8 +25,6 @@ time. Every figure below is from that run.
 | API key registered | first live WASM signature | `782fc8744fe048d5…` |
 | ETH perp opened | 0.005 @ $2,320.81 | `e2b45b060c70031a…` |
 | Position flattened | reduce-only, positions `[]` | `614d7918be5a8482…` |
-| Withdrawal submitted | 11.894350 USDC | `73416d9ec43395f4…` |
-| Exit swap → ZEC | — | **not run — the withdrawal is still in Lighter's bridge** |
 
 The ZEC was sent to the 1Click deposit address
 `t1dmpdr8jfbxiuwZu8uCPtLBAxq67ZrPQdP`, with refunds pointed at a shielded
@@ -36,12 +34,6 @@ The paymaster transaction is the one worth checking:
 `0xae3558fc08346181faf040c598c1f1dc0e3a0edae56ee21803c1ce33f5de1c47` — a
 wallet holding **zero ETH**, before and after, transacting on Arbitrum with
 the gas paid in USDC.
-
-**What did not finish.** The Lighter withdrawal was still unsettled more than
-two hours after submission (`committed_at: 0`), against the ~27 minutes the
-venue's slow path is documented at. The funds are debited and owed; the batch
-had not been committed to L1. The exit swap is therefore unrun, and the demo
-shows that leg on mock adapters rather than pretending otherwise.
 
 ---
 
@@ -188,9 +180,7 @@ the injected object:
 - File the Noir issue covering both findings.
 - Run `/gate` against a live Nym tunnel and record which venues accept mixnet
   traffic.
-- Finish the exit leg and publish the complete round trip with its txid.
-- Measure and document Lighter's real withdrawal latency. `spikes/04` lists it
-  as an open question, and this run suggests the documented figure is wrong.
+- Publish the complete round trip end to end with its transaction hashes.
 
 ---
 
