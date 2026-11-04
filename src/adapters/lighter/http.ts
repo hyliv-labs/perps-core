@@ -351,12 +351,31 @@ export function createLighterAdapter(options: LighterOptions): LighterHttpAdapte
     return pending
   }
 
-  /** POST /api/v1/sendTx takes the signed transaction and answers a hash. */
+  /**
+   * POST /api/v1/sendTx takes the signed transaction and answers a hash.
+   *
+   * **Form-encoded, not JSON.** This sent JSON until 2026-11-04 and every
+   * write refused with `400 {"code":20001,"message":"invalid param "}` —
+   * orders, withdrawals, leverage changes, key registration, all of them.
+   * The same signed transaction, byte for byte, as a urlencoded body
+   * answered 200 with a tx hash.
+   *
+   * Measured against the live venue while registering a real account's
+   * key. Nothing here caught it, because every test asserts this request
+   * against a mock and a mock accepts whatever shape it is handed. The
+   * venue is the only thing that knows, and it had never been asked.
+   *
+   * A query string is not a substitute: it reached the signer and was
+   * rejected further in, at nonce validation.
+   */
   async function submit(tx: SignedTx, txType: number, what: string): Promise<string> {
     const response = await network.fetch(`${api}/api/v1/sendTx`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tx_type: tx.txType ?? txType, tx_info: tx.txInfo }),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        tx_type: String(tx.txType ?? txType),
+        tx_info: tx.txInfo,
+      }).toString(),
     })
     const text = await response.text()
     if (!response.ok) throw new LighterError(response.status, text)

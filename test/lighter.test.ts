@@ -11,6 +11,16 @@ import type { NetworkAdapter } from '@/adapters/types'
 import { testLogger } from './helpers'
 import { evmAddress, parseAmount } from '@/core/types'
 
+
+/**
+ * sendTx is form-encoded, so a test that parsed JSON here would pass while
+ * the venue refused every write. Decoding it the way the venue does keeps
+ * these assertions honest about the bytes that actually go out.
+ */
+function formBody(body: string): Record<string, string> {
+  return Object.fromEntries(new URLSearchParams(body))
+}
+
 function netAnswering(body: unknown, status = 200): NetworkAdapter & { urls: string[] } {
   const urls: string[] = []
   return {
@@ -188,7 +198,7 @@ describe('Lighter writes, once a signer is present', () => {
       async fetch(url, init) {
         sent.push({
           url,
-          ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}),
+          ...(init?.body ? { body: formBody(String(init.body)) } : {}),
         })
         const key = Object.keys(replies).find((k) => url.includes(k))
         return new Response(JSON.stringify(key ? replies[key] : {}), { status: 200 })
@@ -219,7 +229,7 @@ describe('Lighter writes, once a signer is present', () => {
     expect(result.orderId).toBe('0xhash')
     const post = sent.find((s) => s.url.includes('sendTx'))!
     // The API takes the signed blob, not the order fields.
-    expect(post.body).toEqual({ tx_type: 14, tx_info: '{"signed":true}' })
+    expect(post.body).toEqual({ tx_type: '14', tx_info: '{"signed":true}' })
     expect(sent.some((s) => s.url.includes('nextNonce'))).toBe(true)
   })
 
@@ -272,7 +282,7 @@ describe('Lighter writes, once a signer is present', () => {
       reduceOnly: false,
     })
     const post = sent.find((c) => c.url.includes('sendTx'))!
-    expect((post.body as { tx_type: number }).tx_type).toBe(TX_TYPE.createOrder)
+    expect((post.body as { tx_type: string }).tx_type).toBe(String(TX_TYPE.createOrder))
   })
 
   it('refuses a stale nonce rather than signing against a guess', async () => {
@@ -349,7 +359,7 @@ describe('positions and closing out', () => {
       isPrivate: true,
       assurance: 'verified',
       async fetch(url, init) {
-        sent.push({ url, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) })
+        sent.push({ url, ...(init?.body ? { body: formBody(String(init.body)) } : {}) })
         const key = Object.keys(replies).find((k) => url.includes(k))
         return new Response(JSON.stringify(key ? replies[key] : {}), { status: 200 })
       },
