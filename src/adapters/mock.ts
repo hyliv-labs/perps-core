@@ -36,7 +36,7 @@ export interface MockOptions {
   /** Deposited legs go straight to `refunded`, as after a lapsed deadline. */
   readonly refundSwaps?: boolean
   /** What the Lighter withdrawal reports. */
-  readonly withdrawalStatus?: 'pending' | 'settled' | 'failed'
+  readonly withdrawalStatus?: 'pending' | 'claimable' | 'settled' | 'failed'
   /** USD per ZEC. The default is the price 1Click quoted on 2026-10-26. */
   readonly zecUsd?: number
   readonly now?: () => number

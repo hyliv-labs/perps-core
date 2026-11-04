@@ -542,8 +542,35 @@ export function createOrchestrator(deps: OrchestratorDeps) {
       const ref = session.completed[effectKey(session, 'withdraw')]?.handle
       if (!ref) return session
 
-      const status = await adapters.lighter.withdrawalStatus(ref)
+      const status = await adapters.lighter.withdrawalStatus(
+        ref,
+        ...(session.lighter ? ([session.lighter] as const) : ([] as const)),
+      )
       if (status === 'pending') return session
+
+      /*
+       * Claimable is finished on the venue and unfinished for the user.
+       *
+       * Lighter's secure withdrawal ends by the owner claiming the funds on
+       * L1; nothing pushes them. Treating that as settled would move the
+       * session to the exit swap with the money still on the venue, and
+       * treating it as pending would poll for ever while it sat one action
+       * away. So it fails loudly, retryable, and says what to do — which is
+       * the only honest answer when the next step belongs to a person.
+       */
+      if (status === 'claimable') {
+        return apply(session, {
+          type: 'failed',
+          failure: {
+            code: 'withdrawal_claimable',
+            message:
+              'The withdrawal is finalised and waiting to be claimed on Arbitrum. ' +
+              'Claim it from the venue with this session wallet, then retry the exit.',
+            at: now(),
+            retryable: true,
+          },
+        })
+      }
       if (status === 'failed') {
         // The slow path is ~27 minutes via Ethereum; funds are not lost.
         return apply(session, {

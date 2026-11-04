@@ -165,7 +165,23 @@ export interface LighterAdapter {
    * trip and barely noticeable on a large one. Falls back to secure.
    */
   withdraw(account: LighterAccount, to: EvmAddress, value: Amount): Promise<{ ref: string }>
-  withdrawalStatus(ref: string): Promise<'pending' | 'settled' | 'failed'>
+  /**
+   * Where a withdrawal has got to.
+   *
+   * `claimable` is the one that matters and the one this interface used to
+   * be unable to say. A secure withdrawal on Lighter finishes by the user
+   * claiming the funds on L1 — nothing pushes them. Without this state the
+   * caller either polls forever or, worse, reads "not pending" as done and
+   * moves the session on with the money still sitting on the venue.
+   *
+   * `account` is optional because only the authenticated withdrawal history
+   * knows about claiming; the public transaction endpoint reports the same
+   * `committed_at: 0` for "queued" and "waiting for you".
+   */
+  withdrawalStatus(
+    ref: string,
+    account?: LighterAccount,
+  ): Promise<'pending' | 'claimable' | 'settled' | 'failed'>
 }
 
 /* ------------------------------------------------------------- Paymaster */

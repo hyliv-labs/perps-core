@@ -314,6 +314,25 @@ describe.each(STORES)('orchestrator (%s store)', (_name, makeStore) => {
       expect(session.revision).toBe(before)
     })
 
+    it('refuses to settle a withdrawal that is only claimable', async () => {
+      /*
+       * Claimable means finished on the venue and unfinished for the user:
+       * a secure withdrawal ends by the owner claiming on L1, and nothing
+       * pushes the funds. Settling here would move the session on to the
+       * exit swap with the money still sitting on the venue, which is how
+       * a real withdrawal went unclaimed while the session believed it was
+       * done.
+       */
+      const ctx = build(createMockAdapters({ now: () => T0, withdrawalStatus: 'claimable' }))
+      let session = await toTrading(ctx)
+      session = await ctx.orchestrator.endTrading(session.id, USDC('455'))
+      session = await ctx.orchestrator.pollWithdrawal(session.id, USDC('455'))
+      expect(session.state).toBe('failed')
+      expect(session.failure?.code).toBe('withdrawal_claimable')
+      expect(session.failure?.retryable).toBe(true)
+    })
+
+
     it('fails the session when the fast withdrawal does not land', async () => {
       const ctx = build(createMockAdapters({ now: () => T0, withdrawalStatus: 'failed' }))
       let session = await toTrading(ctx)

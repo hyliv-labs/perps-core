@@ -196,6 +196,16 @@ export const ARBITRUM_CHAIN_ID = 42161
  * Lighter and the exit the only thing left to do.
  */
 export const USDC_ASSET_INDEX = 3
+/**
+ * The route asked for on a withdrawal.
+ *
+ * Named "fast" from the venue's own documentation, and on 2026-11-04 a
+ * withdrawal sent with this value came back from the withdrawal history as
+ * `type: "secure"`. So either the value does not mean what the name says,
+ * or the fast route was declined and quietly downgraded. Either way the
+ * caller cannot assume a fast settlement, and `withdrawalStatus` logs when
+ * the type that comes back is not `fast`.
+ */
 export const FAST_WITHDRAWAL_ROUTE = 0
 
 /**
@@ -702,18 +712,65 @@ export function createLighterAdapter(options: LighterOptions): LighterHttpAdapte
       return { ref: await submit(tx, TX_TYPE.withdraw, 'withdrawing') }
     },
 
-    async withdrawalStatus(ref: string) {
+    async withdrawalStatus(ref: string, account?: LighterAccount) {
       /*
-       * A withdrawal Lighter has not indexed yet answers `400 {"code":21500,
-       * "message":"transaction not found"}`, and `get` throws on a 400 — so
-       * the `pending` default below was unreachable for the one case that
-       * needs it most.
+       * Ask the authenticated withdrawal history first, because it is the
+       * only thing that knows about claiming.
        *
-       * Seen on 2026-11-04 on a real withdrawal: the submission returned a
-       * hash, and asking about it immediately afterwards threw. The caller
-       * reads that as a failed withdrawal and retries, which withdraws the
-       * collateral a second time. Not indexed yet is the most ordinary
-       * thing that can happen here, and it means pending.
+       * A secure withdrawal ends `claimable`: Lighter has finalised it and
+       * the funds wait for the user to claim them on L1. The public
+       * transaction endpoint cannot express that — it reports
+       * `committed_at: 0` both for a withdrawal waiting its turn and for
+       * one waiting for its owner, which is how a real withdrawal sat
+       * unclaimed for hours on 2026-11-04 while the caller polled.
+       */
+      if (account && options.createSigner) {
+        try {
+          const signer = await signerFor(account, 'Reading the withdrawal history')
+          const token = await signer.authToken({ apiKeyIndex: account.apiKeyIndex })
+          const response = await network.fetch(
+            `${api}/api/v1/withdraw/history?account_index=${account.accountIndex}&limit=20`,
+            { headers: { authorization: String(token) } },
+          )
+          if (response.ok) {
+            const body = JSON.parse(await response.text()) as {
+              withdraws?: { status?: string; type?: string; amount?: string }[]
+            }
+            // The history keys on its own id, not the submission hash, so
+            // the newest entry is the one just asked about.
+            const entry = body.withdraws?.[0]
+            const state = (entry?.status ?? '').toLowerCase()
+            if (state) {
+              if (entry?.type && entry.type.toLowerCase() !== 'fast') {
+                logger.warn('withdrawal took the secure route, not the fast one', {})
+              }
+              switch (state) {
+                case 'claimable':
+                  return 'claimable' as const
+                case 'claimed':
+                case 'completed':
+                case 'success':
+                  return 'settled' as const
+                case 'failed':
+                case 'rejected':
+                  return 'failed' as const
+                default:
+                  return 'pending' as const
+              }
+            }
+          }
+        } catch (error) {
+          // An unavailable history is not a verdict about the money.
+          logger.warn('could not read the withdrawal history', {})
+          void error
+        }
+      }
+
+      /*
+       * Fallback: the public transaction. It cannot see claiming, so it
+       * never reports `settled` on its own — saying "pending" forever is
+       * wrong but safe, while saying "settled" would move a session on
+       * with the funds still on the venue.
        */
       let body: { status?: string }
       try {
@@ -733,8 +790,6 @@ export function createLighterAdapter(options: LighterOptions): LighterHttpAdapte
         case 'rejected':
           return 'failed' as const
         default:
-          // Anything unrecognised is still in flight. Calling it settled
-          // would move the session on with no money behind it.
           return 'pending' as const
       }
     },

@@ -181,6 +181,65 @@ describe('Lighter adapter', () => {
       expect(await statusFor('')).toBe('pending')
     })
 
+    it('reports a finalised-but-unclaimed withdrawal as claimable', async () => {
+      /*
+       * The bug this exists for cost a real withdrawal hours of waiting.
+       *
+       * A secure withdrawal ends `claimable`: finished on the venue, and
+       * waiting for its owner to claim it on L1. The public transaction
+       * endpoint cannot express that, so without the authenticated history
+       * the caller polls for ever while the money sits one action away.
+       */
+      const authSigner: LighterSigner = { ...signer, authToken: async () => 'token' }
+      const net = {
+        kind: 'direct' as const,
+        isPrivate: false,
+        assurance: 'none' as const,
+        fetch: async (url: string) =>
+          new Response(
+            JSON.stringify(
+              url.includes('withdraw/history')
+                ? {
+                    code: 200,
+                    withdraws: [
+                      { amount: '11.894350', status: 'claimable', type: 'secure' },
+                    ],
+                  }
+                : { code: 200, status: 3 },
+            ),
+            { status: 200 },
+          ),
+      }
+      const status = await createLighterAdapter({
+        network: net,
+        logger: testLogger,
+        createSigner: async () => authSigner,
+        l1Sign: async () => `0x${'cd'.repeat(65)}`,
+      }).withdrawalStatus('0xref', ACCOUNT)
+      expect(status).toBe('claimable')
+    })
+
+    it('reports a claimed withdrawal as settled', async () => {
+      const authSigner: LighterSigner = { ...signer, authToken: async () => 'token' }
+      const net = {
+        kind: 'direct' as const,
+        isPrivate: false,
+        assurance: 'none' as const,
+        fetch: async () =>
+          new Response(
+            JSON.stringify({ code: 200, withdraws: [{ status: 'claimed', type: 'secure' }] }),
+            { status: 200 },
+          ),
+      }
+      const status = await createLighterAdapter({
+        network: net,
+        logger: testLogger,
+        createSigner: async () => authSigner,
+        l1Sign: async () => `0x${'cd'.repeat(65)}`,
+      }).withdrawalStatus('0xref', ACCOUNT)
+      expect(status).toBe('settled')
+    })
+
     it('treats a transaction Lighter has not indexed yet as pending', async () => {
       /*
        * The real failure this prevents. A withdrawal that has just been
