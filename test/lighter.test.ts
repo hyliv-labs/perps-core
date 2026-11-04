@@ -4,6 +4,7 @@ import {
   LighterError,
   MissingSignerError,
   TX_TYPE,
+  CANCEL_IMMEDIATE,
   createLighterAdapter,
   type LighterSigner,
 } from '@/adapters/lighter/http'
@@ -178,6 +179,33 @@ describe('Lighter adapter', () => {
     it('treats anything unrecognised as still in flight', async () => {
       expect(await statusFor('something_new')).toBe('pending')
       expect(await statusFor('')).toBe('pending')
+    })
+
+    it('treats a transaction Lighter has not indexed yet as pending', async () => {
+      /*
+       * The real failure this prevents. A withdrawal that has just been
+       * submitted answers 400 `transaction not found` until it is indexed,
+       * and a 400 throws — so a caller asking straight after withdrawing
+       * saw an exception, read it as a failed withdrawal, and retried.
+       * The retry withdraws the collateral a second time.
+       *
+       * Observed on a live withdrawal on 2026-11-04: the submission
+       * returned a hash and the very next status call threw.
+       */
+      const notFound = {
+        kind: 'direct' as const,
+        isPrivate: false,
+        assurance: 'none' as const,
+        fetch: async () =>
+          new Response(JSON.stringify({ code: 21500, message: 'transaction not found' }), {
+            status: 400,
+          }),
+      }
+      const status = await createLighterAdapter({
+        network: notFound,
+        logger: testLogger,
+      }).withdrawalStatus('0xref')
+      expect(status).toBe('pending')
     })
   })
 
@@ -395,6 +423,40 @@ describe('positions and closing out', () => {
     const { net } = netFor({ '/api/v1/account?': { code: 200, accounts: [] } })
     const lighter = createLighterAdapter({ network: net, logger: testLogger, createSigner: async () => reader, l1Sign: async () => `0x${'cd'.repeat(65)}` })
     await expect(lighter.positions(ACCOUNT_2)).rejects.toThrow(/positions/)
+  })
+
+  it('cancels immediately, with no scheduled time alongside it', async () => {
+    /*
+     * The venue refuses `CancelAllTime should be nil` when a timestamp is
+     * sent with an immediate cancel, which is what this used to do.
+     *
+     * It is not a cosmetic rejection: closeAll runs before every
+     * withdrawal, so a cancel the venue throws out means the session
+     * cannot flatten — and then either strands collateral behind an open
+     * perp or withdraws with the trade still running. Seen trying to
+     * flatten a real position on 2026-11-04.
+     */
+    const seen: { timeInForce: number; time: number }[] = []
+    const cancelSigner = {
+      ...reader,
+      cancelAllOrders: async (a: { timeInForce: number; time: number }) => {
+        seen.push({ timeInForce: a.timeInForce, time: a.time })
+        return { txType: 16, txInfo: '{}' }
+      },
+    }
+    const { net } = netFor({
+      '/api/v1/account?': ACCOUNT_BODY,
+      orderBooks: BOOKS,
+      orderBookDetails: { order_book_details: [{ mark_price: '1000.000' }] },
+      nextNonce: { nonce: 7 },
+      sendTx: { code: 200, tx_hash: '0xhash' },
+    })
+    const lighter = createLighterAdapter({ network: net, logger: testLogger, createSigner: async () => cancelSigner, l1Sign: async () => `0x${'cd'.repeat(65)}` })
+    await lighter.closeAll(ACCOUNT_2)
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0]!.timeInForce).toBe(CANCEL_IMMEDIATE)
+    expect(seen[0]!.time).toBe(0)
   })
 
   it('closes each position reduce-only on the opposite side', async () => {

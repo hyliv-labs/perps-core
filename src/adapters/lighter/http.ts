@@ -199,6 +199,15 @@ export const USDC_ASSET_INDEX = 3
 export const FAST_WITHDRAWAL_ROUTE = 0
 
 /**
+ * Cancel every resting order now, rather than at a scheduled time.
+ *
+ * Named because the pairing is not obvious: with this, the transaction's
+ * cancel-all time must be zero. Sending a timestamp alongside it is
+ * refused with `CancelAllTime should be nil`.
+ */
+export const CANCEL_IMMEDIATE = 0
+
+/**
  * Transaction types, from lighter-go types/txtypes/constants.go at the
  * pinned commit.
  *
@@ -624,8 +633,19 @@ export function createLighterAdapter(options: LighterOptions): LighterHttpAdapte
       const cancelNonce = await nextNonce(account.accountIndex, account.apiKeyIndex)
       await submit(
         await signer.cancelAllOrders({
-          timeInForce: 0,
-          time: Math.floor(Date.now() / 1000),
+          timeInForce: CANCEL_IMMEDIATE,
+          /*
+           * Zero, not a timestamp. `timeInForce: 0` means cancel now, and
+           * the venue refuses a scheduled time alongside it:
+           * `CancelAllTime should be nil`, seen on 2026-11-04 trying to
+           * flatten a real position.
+           *
+           * It matters more than a rejected cancel: closeAll is what runs
+           * before a withdrawal, so a session that could not cancel could
+           * not flatten, and would either strand collateral behind an open
+           * perp or withdraw with the trade still running.
+           */
+          time: 0,
           nonce: cancelNonce,
         }),
         TX_TYPE.cancelAllOrders,
@@ -683,7 +703,27 @@ export function createLighterAdapter(options: LighterOptions): LighterHttpAdapte
     },
 
     async withdrawalStatus(ref: string) {
-      const body = await get<{ status?: string }>(`/api/v1/tx?by=hash&value=${encodeURIComponent(ref)}`)
+      /*
+       * A withdrawal Lighter has not indexed yet answers `400 {"code":21500,
+       * "message":"transaction not found"}`, and `get` throws on a 400 — so
+       * the `pending` default below was unreachable for the one case that
+       * needs it most.
+       *
+       * Seen on 2026-11-04 on a real withdrawal: the submission returned a
+       * hash, and asking about it immediately afterwards threw. The caller
+       * reads that as a failed withdrawal and retries, which withdraws the
+       * collateral a second time. Not indexed yet is the most ordinary
+       * thing that can happen here, and it means pending.
+       */
+      let body: { status?: string }
+      try {
+        body = await get<{ status?: string }>(`/api/v1/tx?by=hash&value=${encodeURIComponent(ref)}`)
+      } catch (error) {
+        if (error instanceof LighterError && /transaction not found|21500/.test(error.message)) {
+          return 'pending' as const
+        }
+        throw error
+      }
       switch ((body.status ?? '').toLowerCase()) {
         case 'committed':
         case 'verified':
