@@ -151,7 +151,19 @@ export interface LighterAdapter {
    * and retire the key with the trade still running.
    */
   closeAll(account: LighterAccount): Promise<void>
-  /** Fast withdrawal: USDC only, 4 USDC minimum. Falls back to secure. */
+  /**
+   * Fast withdrawal: USDC only, **1 USDC minimum**, and the fee is a dollar.
+   *
+   * This said four, which was the fee misread as the minimum. The venue
+   * reports `min_withdrawal_amount: "1.000000"` for asset 3, and
+   * `FAST_WITHDRAWAL_MINIMUM` in `lighter/http.ts` has been right all
+   * along — only this line was wrong. A minimum overstated by four times
+   * would refuse withdrawals the venue would have accepted, stranding
+   * collateral in an account whose only recovery links the session.
+   *
+   * The dollar fee is flat, so it is the dominant cost on a small round
+   * trip and barely noticeable on a large one. Falls back to secure.
+   */
   withdraw(account: LighterAccount, to: EvmAddress, value: Amount): Promise<{ ref: string }>
   withdrawalStatus(ref: string): Promise<'pending' | 'settled' | 'failed'>
 }
