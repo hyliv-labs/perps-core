@@ -177,7 +177,19 @@ the injected object:
 
 ### Next 30 days
 
-- File the Noir issue covering both findings.
+- File the Noir issue covering both findings above.
+- **Integrate further venues.** The adapter interface in
+  [`src/adapters/types.ts`](src/adapters/types.ts) was written so a venue is
+  one implementation behind one interface, each with a mock. Adding a second
+  perps venue and spot DEX routing is the test of whether that shape holds,
+  and it widens where a session can go without widening what anyone learns
+  about it.
+- **Put it in front of beta users.** The mechanism is proven and the demand
+  is not, which is the honest gap in this README. A small group of people who
+  already trade perps and already hold ZEC, watched through a first session,
+  answers questions no amount of further building will: whether the vault
+  step is understood, whether the exit delay is tolerable, and whether the
+  manual Zcash send is a wall or a shrug.
 - Run `/gate` against a live Nym tunnel and record which venues accept mixnet
   traffic.
 - Publish the complete round trip end to end with its transaction hashes.
