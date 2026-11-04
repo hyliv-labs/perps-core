@@ -8,7 +8,9 @@ import {
   createNoirExtensionAdapter,
   isShieldedAddress,
   isTxid,
+  findTxid,
   memoByteLength,
+  pickShielded,
   parseZec,
   shieldedNetwork,
   MEMO_MAX_BYTES,
@@ -25,9 +27,23 @@ const SHIELDED = `u1${'q'.repeat(40)}`
 const TEST_SHIELDED = `utest1${'q'.repeat(40)}`
 const TXID = 'a'.repeat(64)
 
-/** Stand in for what the extension injects at `window.noirwallet`. */
-function inject(zcash: Record<string, unknown>): void {
-  ;(globalThis as { noirwallet?: unknown }).noirwallet = { zcash }
+/**
+ * Stand in for what the extension injects at `window.noirwallet`.
+ *
+ * It is an EIP-1193-style provider: one `request` method dispatching on an
+ * RPC name, which is what the shipped extension actually exposes. Tests
+ * that stubbed named methods were testing the SDK wrapper, not the wallet.
+ */
+function inject(methods: Record<string, (params?: readonly unknown[]) => unknown>): void {
+  ;(globalThis as { noirwallet?: unknown }).noirwallet = {
+    zcash: {
+      async request({ method, params }: { method: string; params?: readonly unknown[] }) {
+        const handler = methods[method]
+        if (!handler) throw new Error(`the wallet does not answer ${method}`)
+        return handler(params)
+      },
+    },
+  }
 }
 
 const prompts = (over: Partial<ManualPrompts> = {}): ManualPrompts => ({
@@ -158,8 +174,8 @@ describe('the extension path', () => {
     // make someone approve again just to read the address it was given.
     let connects = 0
     inject({
-      getAccounts: async () => ({ shielded: SHIELDED }),
-      connect: async () => {
+      zcash_getAccounts: async () => ({ shielded: SHIELDED }),
+      zcash_requestAccounts: async () => {
         connects += 1
         return { shielded: SHIELDED }
       },
@@ -169,15 +185,20 @@ describe('the extension path', () => {
   })
 
   it('connects when the site is not connected yet', async () => {
-    inject({ getAccounts: async () => null, connect: async () => ({ shielded: SHIELDED }) })
+    inject({ zcash_getAccounts: async () => null, zcash_requestAccounts: async () => ({ shielded: SHIELDED }) })
     expect(await createNoirExtensionAdapter(testLogger, 'main').freshReceiveAddress()).toBe(SHIELDED)
   })
 
   it('refuses an unshielded address even from the wallet', async () => {
-    inject({ getAccounts: async () => ({ shielded: 't1transparentaddresshere00000' }) })
+    // Nothing shielded on either network came back, so the complaint is
+    // that there is no usable address rather than that one is wrong.
+    inject({
+      zcash_getAccounts: async () => ({ shielded: 't1transparentaddresshere00000' }),
+      zcash_requestAccounts: async () => ({ shielded: 't1transparentaddresshere00000' }),
+    })
     await expect(
       createNoirExtensionAdapter(testLogger, 'main').freshReceiveAddress(),
-    ).rejects.toThrow(NotShieldedError)
+    ).rejects.toThrow(NoirUnavailableError)
   })
 
   it('refuses a testnet wallet on a mainnet build', async () => {
@@ -186,7 +207,10 @@ describe('the extension path', () => {
      * and a dApp cannot ask which one it is talking to. The address prefix
      * is the only evidence, so this check is the whole defence.
      */
-    inject({ getAccounts: async () => ({ shielded: TEST_SHIELDED }) })
+    inject({
+      zcash_getAccounts: async () => ({ shielded: TEST_SHIELDED }),
+      zcash_requestAccounts: async () => ({ shielded: TEST_SHIELDED }),
+    })
     await expect(
       createNoirExtensionAdapter(testLogger, 'main').freshReceiveAddress(),
     ).rejects.toThrow(NotShieldedError)
@@ -196,17 +220,19 @@ describe('the extension path', () => {
   })
 
   it('says plainly when the wallet will not send for a page', async () => {
-    inject({ getAccounts: async () => ({ shielded: SHIELDED }) })
+    // The provider answers one method and refuses the rest, which is what a
+    // wallet that does not grant sends to a page looks like.
+    inject({ zcash_getAccounts: async () => ({ shielded: SHIELDED }) })
     await expect(
       createNoirExtensionAdapter(testLogger, 'main').send('t1deposit', ZEC('1')),
-    ).rejects.toThrow(NoirUnavailableError)
+    ).rejects.toThrow(/does not answer zcash_sendTransaction/)
   })
 
   it('sends from shielded funds, and says so rather than relying on a default', async () => {
     let sent: Record<string, unknown> | null = null
     inject({
-      sendTransaction: async (p: Record<string, unknown>) => {
-        sent = p
+      zcash_sendTransaction: async (params?: readonly unknown[]) => {
+        sent = params?.[0] as Record<string, unknown>
         return TXID
       },
     })
@@ -227,14 +253,14 @@ describe('the extension path', () => {
   it('refuses to invent a transaction id when the wallet returns none', async () => {
     // The old code answered 'unknown' here. A submission whose evidence is
     // the word "unknown" is worse than one that admits it has none.
-    inject({ sendTransaction: async () => undefined })
+    inject({ zcash_sendTransaction: async () => undefined })
     await expect(
       createNoirExtensionAdapter(testLogger, 'main').send(SHIELDED, ZEC('1')),
     ).rejects.toThrow(/no usable transaction id/)
   })
 
   it('refuses a memo over the byte limit, counted in bytes', async () => {
-    inject({ sendTransaction: async () => TXID })
+    inject({ zcash_sendTransaction: async () => TXID })
     const noir = createNoirExtensionAdapter(testLogger, 'main')
     // 512 three-byte characters is 1536 bytes while being 512 characters.
     await expect(noir.send(SHIELDED, ZEC('1'), '☃'.repeat(MEMO_MAX_BYTES))).rejects.toThrow(
@@ -244,12 +270,12 @@ describe('the extension path', () => {
   })
 
   it('reports the spendable balance, and refuses a syncing one', async () => {
-    inject({ getBalance: async () => ({ total: '9', available: '1.5', synced: true }) })
+    inject({ zcash_getBalance: async () => ({ total: '9', available: '1.5', synced: true }) })
     expect(await createNoirExtensionAdapter(testLogger, 'main').balance()).toEqual(ZEC('1.5'))
 
     // A zero while syncing is a placeholder, not an empty wallet. Showing it
     // tells someone their funds are gone.
-    inject({ getBalance: async () => ({ total: '0', available: '0', synced: false }) })
+    inject({ zcash_getBalance: async () => ({ total: '0', available: '0', synced: false }) })
     await expect(createNoirExtensionAdapter(testLogger, 'main').balance()).rejects.toThrow(
       /still syncing/,
     )
@@ -294,21 +320,28 @@ describe('choosing a path', () => {
     expect(chosen.reason).toMatch(/no Noir Wallet is installed/)
   })
 
-  it('falls back when the wallet is there but cannot send', async () => {
-    // Finding this out when money should move would strand the session.
-    inject({ getAccounts: async () => ({ shielded: SHIELDED }) })
+  it('takes the extension on the strength of the provider alone', async () => {
+    /*
+     * This used to probe for a `send` method and fall back when it was
+     * missing. That probe was meaningless once the real provider turned out
+     * to be a single `request`: which RPCs it will answer is not knowable
+     * in advance, and a page learns that a send is refused only by asking.
+     * Pretending otherwise was testing a wrapper that is not there.
+     */
+    inject({ zcash_getAccounts: async () => ({ shielded: SHIELDED }) })
     const chosen = await chooseNoir({ prompts: prompts(), logger: testLogger, network: 'main' })
-    expect(chosen.kind).toBe('manual')
-    expect(chosen.reason).toMatch(/send on its behalf/)
+    expect(chosen.kind).toBe('extension')
+    // And it still carries the cost of taking that path.
+    expect(chosen.reason).toMatch(/no rotated address/)
   })
 
   it('takes the extension when it will send', async () => {
-    inject({ sendTransaction: async () => TXID, getAccounts: async () => ({ shielded: SHIELDED }) })
+    inject({ zcash_sendTransaction: async () => TXID, zcash_getAccounts: async () => ({ shielded: SHIELDED }) })
     expect((await chooseNoir({ prompts: prompts(), logger: testLogger, network: 'main' })).kind).toBe('extension')
   })
 
   it('honours a preference for doing it by hand', async () => {
-    inject({ sendTransaction: async () => TXID })
+    inject({ zcash_sendTransaction: async () => TXID })
     const chosen = await chooseNoir({
       prompts: prompts(),
       logger: testLogger,
@@ -328,8 +361,8 @@ describe('restoring a connection without asking again', () => {
      */
     let connects = 0
     inject({
-      getAccounts: async () => ({ shielded: SHIELDED }),
-      connect: async () => {
+      zcash_getAccounts: async () => ({ shielded: SHIELDED }),
+      zcash_requestAccounts: async () => {
         connects += 1
         return { shielded: SHIELDED }
       },
@@ -340,17 +373,61 @@ describe('restoring a connection without asking again', () => {
   })
 
   it('answers null rather than prompting when nothing is connected', async () => {
-    inject({ getAccounts: async () => null, connect: async () => ({ shielded: SHIELDED }) })
+    inject({ zcash_getAccounts: async () => null, zcash_requestAccounts: async () => ({ shielded: SHIELDED }) })
     expect(await createNoirExtensionAdapter(testLogger, 'main').connectedAddress?.()).toBeNull()
   })
 
   it('treats a wallet on the other network as no connection at all', async () => {
     // Restoring it would show a testnet address on a mainnet page as though
     // the two were interchangeable.
-    inject({ getAccounts: async () => ({ shielded: TEST_SHIELDED }) })
+    inject({ zcash_getAccounts: async () => ({ shielded: TEST_SHIELDED }) })
     expect(await createNoirExtensionAdapter(testLogger, 'main').connectedAddress?.()).toBeNull()
     expect(await createNoirExtensionAdapter(testLogger, 'test').connectedAddress?.()).toBe(
       TEST_SHIELDED,
+    )
+  })
+})
+
+describe('reading replies whose shape nobody published', () => {
+  it('finds a shielded address wherever it sits, for the right network only', () => {
+    /*
+     * Structural rather than by field name, because the reply shape is not
+     * documented and a name would be a guess — the same guess that put
+     * `getNewAddress` in this file for a week. An address carries its own
+     * network in its prefix, so the key it arrives under does not matter.
+     */
+    expect(pickShielded({ shielded: SHIELDED }, 'main')).toBe(SHIELDED)
+    expect(pickShielded({ accounts: [{ addr: { primary: SHIELDED } }] }, 'main')).toBe(SHIELDED)
+    expect(pickShielded([{ anything: SHIELDED }], 'main')).toBe(SHIELDED)
+    // And it will not hand back the other network's address.
+    expect(pickShielded({ shielded: TEST_SHIELDED }, 'main')).toBeUndefined()
+    expect(pickShielded({ shielded: SHIELDED }, 'test')).toBeUndefined()
+  })
+
+  it('does not hang on a reply that refers to itself', () => {
+    const loop: Record<string, unknown> = { a: 1 }
+    loop['self'] = loop
+    expect(pickShielded(loop, 'main')).toBeUndefined()
+  })
+
+  it('takes the transaction id whether it is the reply or inside it', () => {
+    expect(findTxid(TXID)).toBe(TXID)
+    expect(findTxid({ result: { txid: TXID } })).toBe(TXID)
+    expect(findTxid({ nothing: 'here' })).toBeUndefined()
+    expect(findTxid(null)).toBeUndefined()
+  })
+})
+
+describe('what this wallet cannot do', () => {
+  it('refuses to report a history it has no method to read', async () => {
+    /*
+     * The extension's own RPC allow-list has no history call. Returning an
+     * empty history would read as "not mined yet" and become a permanent
+     * "broadcast" that nothing ever resolves, so this says so instead.
+     */
+    inject({ zcash_getAccounts: async () => ({ shielded: SHIELDED }) })
+    await expect(createNoirExtensionAdapter(testLogger, 'main').history?.()).rejects.toThrow(
+      /no transaction history/,
     )
   })
 })

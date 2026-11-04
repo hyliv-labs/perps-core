@@ -134,26 +134,69 @@ export class NoirUnavailableError extends Error {
  * treated as absent, and the manual path takes over.
  */
 interface NoirZcash {
-  connect?: () => Promise<{ shielded?: string; transparent?: string; accounts?: unknown[] }>
-  getAccounts?: () => Promise<{ shielded?: string; accounts?: unknown[] } | null>
-  getBalance?: (accountId?: string) => Promise<{
-    total?: string
-    available?: string
-    synced?: boolean
-    accounts?: unknown[]
-  }>
-  sendTransaction?: (params: {
-    to: string
-    amount: string
-    memo?: string
-    fundingSource?: 'shielded' | 'transparent'
-  }) => Promise<string>
-  getTransactionHistory?: () => Promise<unknown>
+  request(args: { method: string; params?: readonly unknown[] }): Promise<unknown>
+  on?: (event: string, handler: (...args: unknown[]) => void) => void
+  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void
 }
 
 function injected(): NoirZcash | undefined {
   const w = globalThis as { noirwallet?: { zcash?: NoirZcash } }
-  return w.noirwallet?.zcash
+  const found = w.noirwallet?.zcash
+  return found && typeof found.request === 'function' ? found : undefined
+}
+
+/**
+ * The methods the extension will answer, taken from its own allow-list.
+ *
+ * Read out of the shipped bundle rather than from documentation, because
+ * the documentation describes the SDK wrapper and the wrapper's names are
+ * not these. There is no history method in the list, and its absence is
+ * load-bearing — see `history()` below.
+ */
+const RPC = {
+  requestAccounts: 'zcash_requestAccounts',
+  getAccounts: 'zcash_getAccounts',
+  getBalance: 'zcash_getBalance',
+  sendTransaction: 'zcash_sendTransaction',
+} as const
+
+/**
+ * The first shielded address for `network` anywhere in a reply.
+ *
+ * Structural, like `./history`, and for the same reason: the reply's shape
+ * is not published, so matching on a field name would be a guess. An
+ * address is recognisable in itself — it carries its network in its prefix
+ * — which makes the name it arrives under beside the point.
+ */
+export function pickShielded(reply: unknown, network: ZcashNetwork): ShieldedAddress | undefined {
+  const seen = new Set<unknown>()
+  const walk = (value: unknown): ShieldedAddress | undefined => {
+    if (typeof value === 'string') return isShieldedAddress(value, network) ? value : undefined
+    if (typeof value !== 'object' || value === null) return undefined
+    // Cheap protection against a reply that refers to itself.
+    if (seen.has(value)) return undefined
+    seen.add(value)
+    for (const inner of Array.isArray(value) ? value : Object.values(value)) {
+      const found = walk(inner)
+      if (found) return found
+    }
+    return undefined
+  }
+  return walk(reply)
+}
+
+/** A decimal ZEC string from a balance reply, preferring spendable funds. */
+function pickBalance(reply: unknown): { value?: string; synced?: boolean } {
+  if (typeof reply !== 'object' || reply === null) return {}
+  const r = reply as Record<string, unknown>
+  const synced = typeof r['synced'] === 'boolean' ? r['synced'] : undefined
+  // `available` excludes pending funds; `total` includes money that cannot
+  // be spent yet, and offering that is how a send fails late.
+  for (const key of ['available', 'total']) {
+    const v = r[key]
+    if (typeof v === 'string') return { value: v, ...(synced !== undefined ? { synced } : {}) }
+  }
+  return synced !== undefined ? { synced } : {}
 }
 
 /** Memos are capped at 512 bytes, and it is bytes rather than characters. */
@@ -172,6 +215,23 @@ export function memoByteLength(memo: string): number {
  */
 export function isTxid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{64}$/i.test(value.trim())
+}
+
+/**
+ * The first transaction id anywhere in a reply.
+ *
+ * Structural for the same reason as `pickShielded`: the reply shape is not
+ * published, and a transaction id is recognisable in itself. Returns
+ * undefined rather than a guess when there is nothing that looks like one.
+ */
+export function findTxid(reply: unknown): string | undefined {
+  if (isTxid(reply)) return reply.trim().toLowerCase()
+  if (typeof reply !== 'object' || reply === null) return undefined
+  for (const inner of Array.isArray(reply) ? reply : Object.values(reply)) {
+    const found = findTxid(inner)
+    if (found) return found
+  }
+  return undefined
 }
 
 /**
@@ -207,34 +267,42 @@ export function createNoirExtensionAdapter(
       return Boolean(injected())
     },
     async connect() {
-      // The documentation is explicit that this needs a user gesture, so it
-      // belongs to a button press and never to a render.
-      await api().connect?.()
+      // Needs a user gesture, so it belongs to a button press and never to
+      // a render. `requestAccounts` is the call that prompts.
+      await api().request({ method: RPC.requestAccounts })
     },
     async freshReceiveAddress(): Promise<ShieldedAddress> {
       const wallet = api()
       /*
-       * Not rotated, whatever the name of this method promises. The provider
-       * has no call for a new address, so this is the account's primary
-       * shielded one and reusing it joins this session to the last. The
-       * caller is told through `chooseNoir`'s reason; here the job is simply
-       * not to invent an address that does not exist.
+       * Not rotated, whatever the name of this method promises. The
+       * extension's whole method list has no call for a new address, so
+       * this is the account's primary shielded one and reusing it joins
+       * this session to the last. The caller is told through `chooseNoir`'s
+       * reason; here the job is simply not to invent an address.
        */
-      const existing = await wallet.getAccounts?.()
-      const value = existing?.shielded ?? (await wallet.connect?.())?.shielded
-      if (!value) throw new NoirUnavailableError('the wallet gave no shielded address')
-      // Separate extensions build mainnet and testnet, and a dApp cannot ask
-      // which one this is. The address prefix is the only evidence there is.
-      if (!isShieldedAddress(value, network)) throw new NotShieldedError(value, network)
-      return value
+      const existing = await wallet.request({ method: RPC.getAccounts })
+      const found = pickShielded(existing, network)
+      if (found) return found
+      const granted = await wallet.request({ method: RPC.requestAccounts })
+      const asked = pickShielded(granted, network)
+      if (asked) return asked
+      /*
+       * Nothing usable on this network. Before giving up, look for an
+       * address on the other one — because mainnet and testnet ship as
+       * separate extensions and a page cannot ask which it is talking to,
+       * "you have the wrong build installed" is both the likeliest cause
+       * and a far more useful thing to be told than "no address".
+       */
+      const other: ZcashNetwork = network === 'test' ? 'main' : 'test'
+      const wrongChain = pickShielded(existing, other) ?? pickShielded(granted, other)
+      if (wrongChain) throw new NotShieldedError(wrongChain, network)
+      throw new NoirUnavailableError(
+        `the wallet gave no ${network === 'test' ? 'testnet' : 'mainnet'} shielded address; ` +
+          `check it is the ${network === 'test' ? '[Testnet] ' : ''}Noir Wallet build`,
+      )
     },
     async send(to: string, value: Amount, memo?: string) {
       const wallet = api()
-      if (!wallet.sendTransaction) {
-        throw new NoirUnavailableError(
-          'this Noir Wallet exposes no sendTransaction to a dApp; use the manual path',
-        )
-      }
       if (memo !== undefined && memoByteLength(memo) > MEMO_MAX_BYTES) {
         // Counted in bytes, because a memo of 512 characters is over the
         // limit the moment one of them is not ASCII.
@@ -242,16 +310,26 @@ export function createNoirExtensionAdapter(
           `that memo is ${memoByteLength(memo)} bytes and the limit is ${MEMO_MAX_BYTES}`,
         )
       }
-      const txid = await wallet.sendTransaction({
-        to,
-        // `formatAmount` yields a bare decimal string. Nothing here goes
-        // near a float: eight decimals do not survive one.
-        amount: formatAmount(value),
-        ...(memo ? { memo } : {}),
-        // Passed rather than defaulted, so a future change to the default
-        // cannot silently start spending transparent funds.
-        fundingSource: 'shielded',
+      // One positional argument, an object: that is how the extension
+      // unpacks it — `this.sendTransaction(origin, params[0])`.
+      const reply = await wallet.request({
+        method: RPC.sendTransaction,
+        params: [
+          {
+            to,
+            // `formatAmount` yields a bare decimal string. Nothing here
+            // goes near a float: eight decimals do not survive one.
+            amount: formatAmount(value),
+            ...(memo ? { memo } : {}),
+            // Passed rather than defaulted, so a future change to the
+            // default cannot silently start spending transparent funds.
+            fundingSource: 'shielded',
+          },
+        ],
       })
+      // The reply may be the id itself or an object carrying it; both are
+      // handled without caring what the field is called.
+      const txid = isTxid(reply) ? reply : findTxid(reply)
       if (!isTxid(txid)) {
         throw new NoirUnavailableError(
           'the wallet approved the send but returned no usable transaction id',
@@ -272,23 +350,30 @@ export function createNoirExtensionAdapter(
      * since connecting requires a user gesture.
      */
     async connectedAddress(): Promise<ShieldedAddress | null> {
-      const value = (await api().getAccounts?.())?.shielded
-      if (!value) return null
-      // A wallet on the other network is not a connection this page can use.
-      return isShieldedAddress(value, network) ? value : null
+      // A wallet on the other network yields nothing here, which is right:
+      // it is not a connection this page can use.
+      return pickShielded(await api().request({ method: RPC.getAccounts }), network) ?? null
     },
+    /**
+     * There is no history to read, and saying so is the honest answer.
+     *
+     * The SDK documents a `getTransactionHistory()`, but the extension's
+     * own allow-list of RPC methods — read out of the shipped bundle —
+     * contains no history method of any kind. So on this build a page
+     * cannot learn whether a transaction it broadcast was mined.
+     *
+     * This throws rather than returning an empty history, because an empty
+     * history reads as "not mined yet" and would quietly become a permanent
+     * "broadcast" that nothing ever resolves. The caller shows the
+     * unreadable state instead, which is true.
+     */
     async history(): Promise<unknown> {
-      const read = api().getTransactionHistory
-      if (!read) {
-        throw new NoirUnavailableError('this Noir Wallet exposes no transaction history to a dApp')
-      }
-      // Returned raw. Nothing here knows the shape, and `statusOf` in
-      // ./history is where that is dealt with honestly.
-      return read()
+      throw new NoirUnavailableError(
+        'this Noir Wallet exposes no transaction history to a page, so it cannot confirm mining',
+      )
     },
     async balance(): Promise<Amount> {
-      const raw = await api().getBalance?.()
-      if (!raw) throw new NoirUnavailableError('the wallet gave no balance')
+      const raw = pickBalance(await api().request({ method: RPC.getBalance, params: [{}] }))
       /*
        * `synced: false` marks a zero the wallet is falling back to while it
        * catches up, not a wallet with nothing in it. Returning it would show
@@ -298,11 +383,10 @@ export function createNoirExtensionAdapter(
       if (raw.synced === false) {
         throw new NoirUnavailableError('the wallet is still syncing, so its balance is not known yet')
       }
-      // `available` excludes pending funds; `total` includes money that
-      // cannot be spent yet, and offering that is how a send fails late.
-      const value = raw.available
-      if (value === undefined) throw new NoirUnavailableError('the wallet gave no spendable balance')
-      return parseZec(value)
+      if (raw.value === undefined) {
+        throw new NoirUnavailableError('the wallet gave no spendable balance')
+      }
+      return parseZec(raw.value)
     },
   }
 }
@@ -404,13 +488,8 @@ export async function chooseNoir(options: ChooseNoirOptions): Promise<{
       reason: 'no Noir Wallet is installed on this browser',
     }
   }
-  if (typeof found.sendTransaction !== 'function') {
-    return {
-      adapter: createManualNoirAdapter(prompts, logger, network),
-      kind: 'manual',
-      reason: 'the installed wallet does not let a page send on its behalf',
-    }
-  }
+  // `injected()` already refuses anything without a `request`, which is the
+  // whole provider surface — there is no separate send to probe for.
   return {
     adapter: createNoirExtensionAdapter(logger, network),
     kind: 'extension',
