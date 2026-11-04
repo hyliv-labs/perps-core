@@ -109,11 +109,7 @@ describe('the live-test escape hatch', () => {
     )
   })
 
-  // UNSKIP WHEN THE SESSION SCREEN LANDS. This guards a real safety
-  // property and is only parked because the file it reads does not exist
-  // here yet; the screen arrives with the session UI. Leaving it skipped
-  // past that point silently drops the guard.
-  it.skip('is the only thing that can widen the override beyond the mocks', () => {
+  it('is the only thing that can widen the override beyond the mocks', () => {
     // If a second route to `canOverride` appears, this says so. The demo
     // override exists to be ticked against mocks; it must not become a
     // switch that moves real money on a deployed page.
