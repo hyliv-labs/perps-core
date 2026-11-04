@@ -126,18 +126,28 @@ export function PayPanel({ network }: { network: ZcashNetwork }) {
     if (pending.length === 0) return
 
     let alive = true
+    let timer: ReturnType<typeof setInterval> | undefined
     const poll = async () => {
       let history: unknown
       try {
         history = await noir.history?.()
       } catch {
-        // A wallet that will not answer is not a transaction that failed.
+        /*
+         * A wallet that will not answer is not a transaction that failed.
+         *
+         * And on the shipped extension it will never answer: its RPC list
+         * has no history method at all. So this stops rather than asking
+         * again every twenty seconds for the life of the page — the answer
+         * is not going to change, and the receipt already says plainly that
+         * mining could not be confirmed here.
+         */
         if (alive) {
           setStatuses((prev) => ({
             ...prev,
             ...Object.fromEntries(pending.map((r) => [r.txid, 'unreadable' as TxStatus])),
           }))
         }
+        if (timer) clearInterval(timer)
         return
       }
       if (!alive) return
@@ -156,11 +166,11 @@ export function PayPanel({ network }: { network: ZcashNetwork }) {
       if (landed) setReceipts(await store.list())
     }
 
+    timer = setInterval(() => void poll(), POLL_MS)
     void poll()
-    const timer = setInterval(() => void poll(), POLL_MS)
     return () => {
       alive = false
-      clearInterval(timer)
+      if (timer) clearInterval(timer)
     }
   }, [store, from, receipts, noir])
 
