@@ -9,6 +9,7 @@ import type { NetworkAdapter } from '@/adapters/types'
 import { useRoute, type Route } from './router'
 import { PreviewScreen } from './session/Preview'
 import { PayPanel } from './pay/PayPanel'
+import { VenueGate } from './gate/VenueGate'
 import { readConfig } from '@/core/config'
 
 /**
@@ -25,7 +26,21 @@ export function App() {
   const [route, navigate] = useRoute()
   if (route === '/') return <Landing navigate={navigate} />
   if (route === '/pay') return <PayScreen navigate={navigate} />
+  if (route === '/gate') return <GateScreen navigate={navigate} />
   return <TradingApp navigate={navigate} />
+}
+
+function GateScreen({ navigate }: { navigate: (to: Route) => void }) {
+  return (
+    <main className="gate">
+      <a className="gate-back" href="/" onClick={backTo(navigate)}>
+        <span aria-hidden="true">&larr;</span> Back
+      </a>
+      <div className="gate-stage">
+        <VenueGate />
+      </div>
+    </main>
+  )
 }
 
 function PayScreen({ navigate }: { navigate: (to: Route) => void }) {

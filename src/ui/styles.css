@@ -504,3 +504,36 @@ textarea {
   color: var(--meta);
   font-size: 12px;
 }
+
+/* ---------------------------------------------------------- venue gate */
+/* Read-only reachability, shown as a list rather than a single verdict:
+   which venue refused matters more than how many did. */
+
+.gate-panel { max-width: 44rem; margin: 0 auto; }
+.gate-lede { color: var(--ink-soft, #667); margin-bottom: 1.5rem; }
+.gate-actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.gate-note { font-size: .9rem; color: var(--ink-soft, #667); margin: .4rem 0; }
+.gate-error { color: var(--bad, #a22); }
+
+.gate-list { list-style: none; padding: 0; display: grid; gap: .75rem; }
+.gate-list li {
+  border: 1px solid var(--rule, #d8d5cc);
+  border-left-width: 3px;
+  padding: .75rem 1rem;
+  border-radius: 2px;
+}
+.gate-list li[data-outcome='pass'] { border-left-color: var(--good, #2a7); }
+.gate-list li[data-outcome='fail'] { border-left-color: var(--bad, #a22); }
+.gate-list li[data-outcome='running'] { border-left-color: var(--ink-soft, #667); }
+.gate-list li[data-outcome='pending'] { opacity: .55; }
+
+.gate-outcome { float: right; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+.gate-stakes { font-size: .9rem; color: var(--ink-soft, #667); margin: .3rem 0 0; }
+.gate-detail {
+  font-size: .8rem; margin: .5rem 0 0; padding: .5rem;
+  background: var(--sunk, #f4f2ec); overflow-x: auto; white-space: pre-wrap;
+  word-break: break-word;
+}
+.gate-verdict { margin-top: 1.25rem; font-weight: 600; }
+.gate-verdict.pass { color: var(--good, #2a7); }
+.gate-verdict.fail { color: var(--bad, #a22); }

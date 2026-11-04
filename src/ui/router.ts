@@ -9,12 +9,13 @@
 
 import { useEffect, useState } from 'react'
 
-export type Route = '/' | '/app' | '/pay'
+export type Route = '/' | '/app' | '/pay' | '/gate'
 
 function toRoute(pathname: string): Route {
   const path = pathname.replace(/\/+$/, '')
   if (path === '/app') return '/app'
   if (path === '/pay') return '/pay'
+  if (path === '/gate') return '/gate'
   return '/'
 }
 
