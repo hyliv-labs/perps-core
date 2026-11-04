@@ -152,10 +152,25 @@ export function createOneClickAdapter(options: OneClickOptions): NearIntentsAdap
         depositType: 'ORIGIN_CHAIN',
         refundType: 'ORIGIN_CHAIN',
         recipientType: 'DESTINATION_CHAIN',
-        // Public quotes are no longer priced. `basic` keeps the deposit on
-        // Zcash and the payout on Arbitrum; it does not move the funds into
-        // a Confidential Intents account.
-        confidentiality: 'basic',
+        /*
+         * `confidentiality` is deliberately absent, and this cost a real
+         * session to find out.
+         *
+         * It was added on the belief that public quotes are no longer
+         * priced without it. That is true of `dry: true`, which only
+         * prices — and every test here is a dry quote against a mock, so
+         * nothing caught what it does to a real one.
+         *
+         * Sending it with `dry: false` fails the ZEC leg every time:
+         * `400 Error saving a quote to DB`, three runs out of three on
+         * 2026-11-04, while the identical body without it answered 201
+         * with a deposit address three times out of three. A control leg
+         * with no Zcash in it succeeded either way, so it is this field on
+         * this pair, not the request shape.
+         *
+         * Since quoting is the first thing a session does, a quote that
+         * cannot be created means no session can start at all.
+         */
         originAsset: origin,
         destinationAsset: destination,
         amount: request.from.units.toString(),

@@ -85,7 +85,11 @@ describe('1Click adapter', () => {
     expect(sent.depositType).toBe('ORIGIN_CHAIN')
     expect(sent.recipientType).toBe('DESTINATION_CHAIN')
     expect(sent.refundType).toBe('ORIGIN_CHAIN')
-    expect(sent.confidentiality).toBe('basic')
+    // Asserted absent, not present. Sending it fails a real ZEC quote with
+    // `400 Error saving a quote to DB` while a dry quote accepts it
+    // happily, so no mock can tell the difference. This line is the only
+    // thing standing between that and a session that cannot start.
+    expect(sent.confidentiality).toBeUndefined()
     expect(sent.originAsset).toBe('nep141:zec.omft.near')
     expect(sent.destinationAsset).toBe(
       'nep141:arb-0xaf88d065e77c8cc2239327c5edb3a432268e5831.omft.near',
