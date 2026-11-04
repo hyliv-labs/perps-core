@@ -1,0 +1,506 @@
+:root {
+  /* The app sheet: "True-black flat". Elevation by lightness alone, the
+     accent confined to status marks, never on buttons, tabs or nav. */
+  --bg: #111111;
+  --panel: #1c1c1c;
+  --panel-raised: #2a2a2a;
+  --line: #2a2a2a;
+  --text: #f2f2f2;
+  --muted: #a3a3a3;
+  --meta: #949494;
+  --accent: #c4a68c;
+  --accent-ink: #141008;
+  --pass: #b7d97a;
+  --warn: #e0b341;
+  --block: #f08c6e;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 'Bricolage Grotesque', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Identifiers, amounts and keys stay monospace: that is what it is for. */
+.mono, dd, .states li { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+/* The session screen is a narrow column. Scoped, because the landing page
+   is a different shape and was silently inheriting this cap. */
+main.session { max-width: 760px; margin: 0 auto; padding: 32px 16px 96px; }
+
+main.session h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 6px; }
+main.session h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 28px 0 10px; }
+
+.sub { color: var(--muted); margin: 0 0 24px; font-size: 13px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.row + .row { border-top: 1px solid var(--line); }
+.row dt { color: var(--muted); }
+.row dd { margin: 0; text-align: right; word-break: break-all; }
+
+.states { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+.states li {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.states li[data-on='true'] { color: var(--text); border-color: var(--line); }
+.states li[data-at='true'] { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+/*
+ * The pill button of the entry screens.
+ *
+ * Scoped away from `.app`, which has its own sheet. A bare `button` selector
+ * here reached across into the trading window and gave its order-type tabs an
+ * 18px radius and a white fill, which is why they kept rendering as slabs and
+ * crescents whatever the app sheet asked for.
+ */
+:where(:not(.app *)) > button,
+button {
+  font: inherit;
+  font-weight: 500;
+  background: var(--text);
+  color: var(--bg);
+  border: 0;
+  border-radius: 18px;
+  min-height: 36px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: filter 100ms ease-out, transform 60ms ease-out;
+}
+button:hover { filter: brightness(0.92); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+/* The app sheet owns every button inside the app, including the reset.
+   `:where` keeps this at element specificity, so any class in session.css
+   still wins without having to out-specify its own reset. */
+:where(.app) button {
+  background: none;
+  color: inherit;
+  border-radius: 0;
+  min-height: 0;
+  padding: 0;
+  font-weight: 400;
+}
+:where(.app) button:hover { filter: none; }
+:where(.app) button:active { transform: none; }
+button.ghost {
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 0;
+  border-radius: 6px;
+}
+button.ghost:hover { filter: brightness(1.2); }
+
+input {
+  font: inherit;
+  background: #0f1317;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.field { display: grid; gap: 6px; margin-bottom: 12px; }
+.field label { color: var(--muted); font-size: 13px; }
+
+.finding { border-left: 3px solid var(--warn); padding: 8px 12px; margin: 8px 0; background: #1a1711; }
+.finding[data-severity='block'] { border-color: var(--block); background: #1d1210; }
+.finding strong { display: block; font-size: 13px; }
+.finding span { color: var(--muted); font-size: 13px; }
+
+.error { color: var(--block); margin-top: 12px; font-size: 13px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+
+/* The unlock screen. */
+.panel-head { font-size: 15px; font-weight: 500; margin: 0 0 10px; }
+
+.phrase {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+  padding: 0;
+}
+.phrase li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 10px;
+  background: #0f1317;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.phrase li span { color: var(--muted); font-size: 12px; min-width: 1.2em; }
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.check input { width: auto; }
+
+.fallback { margin-top: 14px; }
+.fallback summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+}
+.fallback summary:hover { color: var(--text); }
+
+button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+button.link:hover { color: var(--text); }
+
+textarea {
+  font: inherit;
+  background: #0f1317;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 10px;
+  width: 100%;
+  resize: vertical;
+}
+
+.skeleton-row {
+  height: 40px;
+  border-radius: 6px;
+  background: var(--panel-raised, #1a1f26);
+}
+
+@media (max-width: 560px) {
+  .phrase { grid-template-columns: repeat(2, 1fr); }
+}
+
+/*
+ * The vault gate. A centered card, because the old column left the form
+ * as a small grey slab in an empty page, and the only action was a ghost
+ * button inside a disclosure.
+ */
+.gate {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding: 28px 20px 40px;
+}
+
+.gate-back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+.gate-back:hover { color: var(--text); }
+
+.gate-stage {
+  display: grid;
+  place-items: center;
+  padding-bottom: 8vh;
+}
+
+.gate-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 28px 24px 22px;
+}
+
+.gate-kicker {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.gate-card h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.gate-lead {
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.gate .field { margin-bottom: 14px; }
+.gate .field label { font-size: 13px; }
+
+.gate input,
+.gate textarea {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 48px;
+  padding: 12px 14px;
+  transition: border-color 100ms ease-out;
+}
+.gate textarea { min-height: 96px; line-height: 1.45; }
+.gate input:hover,
+.gate textarea:hover { border-color: var(--muted); }
+
+.field-control { position: relative; }
+.field-control input { padding-right: 72px; }
+
+.gate button {
+  border-radius: 6px;
+  min-height: 44px;
+  font-weight: 500;
+  transition: filter 100ms ease-out, background-color 100ms ease-out, color 100ms ease-out;
+}
+.gate button:hover { filter: none; }
+
+.gate button.gate-primary {
+  width: 100%;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.gate button.gate-primary:hover:not(:disabled) { filter: brightness(1.06); }
+.gate button.gate-primary:disabled { opacity: 0.4; }
+
+.gate button.gate-quiet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+.gate button.gate-quiet:hover { color: var(--text); }
+
+.gate button.field-reveal {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  min-height: 40px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+}
+.gate button.field-reveal:hover { color: var(--text); background: var(--panel-raised); }
+.gate button.field-reveal[aria-pressed='true'] { color: var(--text); }
+
+.gate .fallback { margin-top: 16px; border-top: 1px solid var(--line); }
+.gate .fallback summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+}
+.gate .phrase li {
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.gate :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gate input,
+  .gate textarea,
+  .gate button { transition: none; }
+}
+
+
+/* The connection panel. */
+.net {
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.net-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.net-label { font-size: 14px; color: var(--meta); }
+.net-verdict { font-size: 14px; font-weight: 600; color: var(--block); }
+.net-verdict[data-private='true'] { color: var(--pass); }
+.net-say { color: var(--muted); font-size: 14px; margin: 0 0 8px; max-width: 62ch; }
+.net .actions { margin-top: 12px; }
+.net .check { align-items: flex-start; }
+
+/* ----------------------------------------------------------- /pay, the
+   shielded payment screen. It borrows the gate's card so the two screens
+   outside the session read as one app, and adds only what a form and a list
+   of receipts need. */
+
+.pay {
+  width: min(520px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 28px 24px 22px;
+}
+
+.pay-head h2 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.pay-net,
+.pay-from {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pay-from code,
+.pay-net code {
+  color: var(--text);
+  word-break: break-all;
+}
+
+.pay-connect p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pay-field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.pay-field span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pay-field input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.pay button {
+  width: 100%;
+  padding: 11px 16px;
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.pay button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pay-receipts {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.pay-receipts h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pay-note {
+  margin: 0 0 14px;
+  color: var(--meta);
+  font-size: 13px;
+}
+
+.pay-receipts ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Scoped under `.pay` to outrank `.gate li`, which the vault's
+   recovery-phrase list sets to a 54px grid. This screen borrows the gate's
+   frame for its layout and so inherits that rule; without the extra class
+   the 64-character id is squeezed into the 54px column and wraps eight
+   characters at a time. Evidence has to be readable to be evidence. */
+.pay .pay-receipts li {
+  display: block;
+  grid-template-columns: none;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pay .pay-receipts li > a {
+  display: block;
+  width: 100%;
+}
+
+.pay-receipts li:last-child { border-bottom: 0; }
+
+.pay-receipts code {
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--text);
+}
+
+.pay-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--meta);
+  font-size: 12px;
+}

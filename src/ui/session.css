@@ -1,0 +1,677 @@
+/*
+ * The session screen.
+ *
+ * App-screen rules, not page rules: 1px borders, small labels and repeated
+ * panels are correct here. Colour stays on data and never touches a button,
+ * a tab or the nav. No hero header, no KPI tiles, no sparklines, no zebra.
+ * Figures sit between 16 and 40px; the title is 24.
+ *
+ * Style: "True-black flat" (tasteskill app sheet, seed 2049734252) mapped
+ * onto the page's palette so the two screens are one product.
+ */
+
+.app {
+  --ground: #111111;
+  --card: #1c1c1c;
+  --nested: #2a2a2a;
+  --rule: #2a2a2a;
+  --ink: #f2f2f2;
+  --muted: #a3a3a3;
+  --meta: #949494;
+  /* The one data hue. It marks state and change, never a control. */
+  --hue: #c4a68c;
+  --ok: #5fcf87;
+  /* A true red, not a rust orange: a book full of falling prices should not
+     read as a warm accent colour. */
+  --no: #ff5a5a;
+
+  min-height: 100vh;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app .num,
+.app .mono {
+  font-variant-numeric: tabular-nums;
+}
+.app .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.app .break { word-break: break-all; }
+
+.app .meta { color: var(--meta); font-size: 13px; }
+.app .meta-line { display: block; color: var(--meta); font-size: 13px; margin-top: 2px; }
+
+/* ---------------------------------------------------------------- shell */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  height: 56px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.bar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  font-weight: 500;
+}
+.bar-brand .mark { color: var(--hue); }
+.bar-scope { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.bar-sep { width: 1px; height: 16px; background: var(--rule); margin: 0 4px; }
+.figure-sm { font-variant-numeric: tabular-nums; }
+.dot-private, .dot-overridden, .dot-open, .dot-none {
+  width: 7px; height: 7px; border-radius: 50%;
+}
+.dot-private { background: var(--ok); }
+/* An override is not a good state and does not get the good colour. */
+.dot-overridden { background: var(--hue); }
+.dot-open { background: var(--no); }
+.dot-none { background: var(--meta); }
+
+.app-body { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+
+/* The ladder: this product's own structure, doing the nav's job. */
+.ladder {
+  border-right: 1px solid var(--rule);
+  padding: 20px 16px;
+  min-height: calc(100vh - 56px);
+}
+.ladder-head { margin: 0 0 12px; font-size: 13px; color: var(--meta); }
+.ladder ol { list-style: none; margin: 0 0 24px; padding: 0; counter-reset: step; }
+.ladder li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--meta);
+  font-size: 14px;
+}
+.ladder-rule { height: 2px; border-radius: 1px; background: currentColor; opacity: 0.4; }
+.ladder li[data-done='true'] { color: var(--muted); }
+/* Active is a neutral step and a change of ink, never a coloured pill. */
+.ladder li[data-here='true'] { background: var(--nested); color: var(--ink); }
+.ladder li[data-here='true'] .ladder-rule { background: var(--hue); opacity: 1; }
+.ladder li[data-off='true'] .ladder-rule { background: var(--no); }
+
+.ladder-facts { margin: 0; border-top: 1px solid var(--rule); padding-top: 14px; }
+.ladder-facts > div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 8px; }
+.ladder-facts dt { color: var(--meta); font-size: 13px; }
+.ladder-facts dd { margin: 0; font-size: 13px; }
+
+/* --------------------------------------------------------------- canvas */
+
+.canvas { padding: 24px 24px 64px; max-width: 980px; outline: none; }
+.canvas-head { margin-bottom: 20px; }
+.canvas h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+/* The finding sits where it is read first, next to what it drives. */
+.finding-line { margin: 6px 0 0; color: var(--ink); font-size: 14px; }
+
+.work {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 20px;
+  background: var(--card);
+}
+
+.panel-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--meta);
+}
+/* Figures stay between 16 and 40px: a 48px number is a landing page. */
+.figure { font-size: 28px; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
+
+.say { margin: 0; max-width: 62ch; color: var(--muted); }
+.say-no { margin: 12px 0 0; color: var(--no); font-size: 14px; }
+.empty {
+  margin: 0;
+  padding: 20px;
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  color: var(--meta);
+  font-size: 14px;
+}
+
+/* --------------------------------------------------------------- fields */
+
+.field-row { margin-bottom: 16px; }
+.canvas-wide .field-row { margin-bottom: 10px; }
+.canvas-wide .seg-item { min-height: 34px; }
+.field-row label,
+.field-row > span:first-child {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--meta);
+}
+.input-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 0 12px;
+  max-width: 320px;
+}
+.input-unit input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.input-unit input:focus { outline: none; }
+.input-unit:focus-within { border-color: var(--muted); }
+.input-unit > span { color: var(--meta); font-size: 13px; }
+
+.app select {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  max-width: 320px;
+}
+
+.seg { display: inline-flex; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; }
+.seg-item {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.seg-item + .seg-item { border-left: 1px solid #3a3a3a; }
+/* A neutral step marks the chosen side; the hue is reserved for data. */
+.seg-item[aria-pressed='true'] { background: var(--nested); color: var(--ink); }
+
+.app .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+/* Only the actions row. A selector over every button in `.work` kept
+   stealing the order-type tabs and then the market cards, rendering both as
+   solid white slabs. Buttons that are not actions own their own look. */
+.app .actions button,
+.app .trade button:not(.seg-item) {
+  min-height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--ground);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.app .actions button.quiet,
+.app .trade button.quiet {
+  background: var(--nested);
+  color: var(--ink);
+}
+.app button:disabled { opacity: 0.45; cursor: not-allowed; }
+.app :focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+
+/* --------------------------------------------------------------- tables */
+
+.figures, .rows { width: 100%; border-collapse: collapse; margin: 16px 0 8px; }
+.figures th, .rows th { text-align: left; font-weight: 400; font-size: 13px; color: var(--meta); }
+.figures td, .figures th, .rows td, .rows th { padding: 9px 0; }
+.canvas-wide .tw-figures td, .canvas-wide .tw-figures th { padding: 6px 0; }
+.figures tr + tr th, .figures tr + tr td,
+.rows tbody tr td { border-top: 1px solid var(--rule); }
+/* Numbers right-aligned and tabular, always. */
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.figures-total th, .figures-total td { color: var(--ink); font-weight: 500; }
+.rows thead th { border-bottom: 1px solid var(--rule); }
+/* Colour says good or bad; a zero stays grey, or it reads as a direction. */
+.up { color: var(--ok); }
+.down { color: var(--no); }
+
+.pairs { margin: 0; }
+.pairs > div {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px 0;
+}
+.pairs > div + div { border-top: 1px solid var(--rule); }
+.pairs dt { color: var(--meta); font-size: 13px; }
+.pairs dd { margin: 0; }
+
+/* ----------------------------------------------------------------- gate */
+
+.gate {
+  margin-top: 16px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--no);
+  border-radius: 6px;
+  padding: 14px 16px;
+  background: var(--card);
+}
+.gate-head { display: flex; justify-content: space-between; gap: 16px; margin: 0 0 10px; font-size: 13px; }
+.verdict-no { color: var(--no); font-weight: 500; }
+.verdict-warn { color: var(--hue); font-weight: 500; }
+.gate ul { list-style: none; margin: 0; padding: 0; }
+.gate li { display: grid; grid-template-columns: 54px 1fr; gap: 12px; padding: 7px 0; font-size: 14px; }
+.gate li + li { border-top: 1px solid var(--rule); }
+.tag-no, .tag-warn { font-size: 12px; font-weight: 600; }
+.tag-no { color: var(--no); }
+.tag-warn { color: var(--hue); }
+
+/* -------------------------------------------------------------- trading */
+
+.trade { display: grid; gap: 28px; }
+@media (min-width: 900px) { .trade { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 32px; } }
+
+/* ----------------------------------------------------------------- 1024 */
+
+@media (max-width: 860px) {
+  .app-body { grid-template-columns: 1fr; }
+  .ladder { min-height: 0; border-right: 0; border-bottom: 1px solid var(--rule); }
+  .ladder ol { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+  .ladder li { height: 30px; }
+  .pairs > div { grid-template-columns: 1fr; gap: 2px; }
+}
+
+
+/* The connection panel, as it sits on this screen. */
+.app .net {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 16px 18px;
+  background: var(--card);
+  margin-bottom: 16px;
+}
+.app .net-head { display: flex; justify-content: space-between; gap: 16px; margin: 0 0 8px; }
+.app .net-label { font-size: 13px; color: var(--meta); }
+.app .net-verdict { font-size: 13px; font-weight: 500; color: var(--no); }
+.app .net-verdict[data-state='private'] { color: var(--ok); }
+.app .net-verdict[data-state='overridden'] { color: var(--hue); }
+.app .net-say { margin: 0 0 6px; color: var(--muted); font-size: 14px; max-width: 70ch; }
+.app .net .actions { margin-top: 12px; }
+.app .net .check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--meta);
+  font-size: 13px;
+}
+.app .net .check input { width: auto; }
+.app .skeleton-row { height: 38px; border-radius: 6px; background: var(--nested); }
+
+/* ------------------------------------------------- the trading window */
+
+/*
+ * One market, three columns: the book, the ticket, and what has happened.
+ * Colour is on prices, sizes and changes only. The side buttons take a
+ * neutral step like every other control; the direction is carried by the
+ * words Long and Short and by the book beside them.
+ */
+
+.tw-waiting { padding: 28px 0; }
+
+/*
+ * One row, not three stacked ones.
+ *
+ * The pair and its price sit beside the figures rather than above them,
+ * because every line the header spends is a line the order ticket loses
+ * below the fold — and a trading window you scroll to reach the buy button
+ * is not a trading window.
+ */
+.tw-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+.tw-pair { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.tw-symbol { margin: 0; font-size: 14px; font-weight: 500; }
+.tw-symbol .meta { margin-left: 8px; font-weight: 400; }
+.tw-last { display: flex; align-items: baseline; gap: 10px; margin: 0; }
+/* The biggest figure on the screen, and still inside the 16-40px band. */
+.tw-last > .num { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+.tw-change { font-size: 15px; font-weight: 500; }
+
+.tw-stats { display: flex; flex-wrap: wrap; gap: 2px 26px; margin: 0; }
+.tw-stats > div { display: flex; flex-direction: column; gap: 0; }
+.tw-stats dt { font-size: 12px; color: var(--meta); }
+.tw-stats dd { margin: 0; font-size: 14px; }
+.tw-note { flex-basis: 100%; margin: 0; }
+
+/* Chart over positions, then the book, then the ticket: the arrangement
+   every perps exchange converges on, because it is the order a trader reads
+   in — what happened, what is resting, what to send. */
+.tw-floor { display: grid; gap: 20px; }
+@media (min-width: 1100px) {
+  .tw-floor { grid-template-columns: minmax(0, 11fr) minmax(0, 5fr) minmax(0, 5fr); gap: 20px; }
+  /* Positions run the whole width under the three columns, where an
+     exchange puts them: they belong to the account, not to one panel. */
+  .tw-below { grid-column: 1 / -1; }
+}
+.tw-middle { min-width: 0; }
+.tw-below { border-top: 1px solid var(--rule); padding-top: 14px; }
+
+/* The book. Monospace figures so a column of prices reads as one number. */
+.tw-levels { width: 100%; border-collapse: collapse; table-layout: fixed; }
+/* The row is what the depth bar measures against, so the row is what is
+   positioned. A bar anchored to its own zero-width cell draws a stripe in
+   the margin instead of behind the level it describes. */
+.tw-levels tr { position: relative; }
+.tw-levels td {
+  padding: 3px 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.tw-levels th {
+  padding: 0 0 5px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--meta);
+  text-align: right;
+}
+.tw-levels thead th:first-child { text-align: left; }
+.tw-levels .tw-price { width: 40%; text-align: left; }
+.tw-depth { width: 0; padding: 0; }
+/* Drawn to scale against the deepest level shown, so the bar is the data. */
+.tw-depth > span {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  right: 0;
+  display: block;
+  border-radius: 2px;
+  opacity: 0.14;
+}
+.tw-levels tr[data-side='ask'] .tw-depth > span { background: var(--no); }
+.tw-levels tr[data-side='bid'] .tw-depth > span { background: var(--ok); }
+
+.tw-spread {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.tw-spread > .num { font-size: 16px; font-weight: 600; }
+
+/* The ticket. */
+.tw-seg { display: flex; width: 100%; margin-bottom: 10px; }
+.tw-seg .seg-item { flex: 1; }
+/* The chosen side is a neutral step like every other control. Long and Short
+   are words, and the book beside them is already the colour. */
+.tw-ticket .input-unit, .tw-ticket .tw-range { max-width: none; }
+
+.tw-fractions { display: flex; gap: 8px; margin: -4px 0 12px; }
+.tw-fractions .seg-item {
+  flex: 1;
+  min-height: 30px;
+  padding: 0;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.tw-lev-value { color: var(--ink); font-weight: 500; }
+.tw-range { width: 100%; accent-color: var(--hue); }
+.tw-figures { margin-top: 4px; }
+
+.tw-right { display: grid; gap: 24px; align-content: start; }
+.tw-tape td, .tw-tape th { padding: 4px 0; font-size: 13px; }
+.tw-tape tbody tr td { border-top: 0; }
+
+/* The trading floor is the one state that needs the whole width. */
+.canvas-wide { max-width: 1400px; }
+
+/*
+ * On the trading floor the connection panel steps aside entirely.
+ *
+ * It costs 180px at the top of the one state that needs every pixel, and its
+ * verdict is carried in two other places that cost nothing: the top bar and
+ * the session facts in the ladder, both from the same `verdictState`. The
+ * prose and the controls belong to the states where the session is being set
+ * up, not to the one where someone is reading a book.
+ */
+.canvas-wide { padding-top: 12px; }
+.canvas-wide h1 { line-height: 1.2; }
+.canvas-wide .actions { margin-top: 12px; }
+/* Nothing to hide any more: the connection lives in the bar, where every
+   state can reach it. */
+.canvas-wide .canvas-head { margin-bottom: 8px; }
+.canvas-wide .work { padding: 14px 18px; }
+
+/* Limit price and size share a row, so the ticket keeps its button on screen. */
+.tw-fields[data-both='true'] { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.tw-help { margin: -4px 0 10px; }
+
+/* --------------------------------------------------- the market strip */
+
+/*
+ * Nine markets in one row, standing where a price chart would.
+ *
+ * A browse page gives this three rows of big cards; a trading screen cannot,
+ * because every pixel spent here pushes the order ticket off the bottom of
+ * the window. So: one row, the figure small, and the line doing the work.
+ */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 7px;
+  margin-bottom: 10px;
+}
+.strip-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+/* The chosen market is a neutral step and a change of ink, not a colour. */
+.strip-card[aria-checked='true'] { background: var(--nested); border-color: var(--muted); }
+.strip-card:disabled { opacity: 0.45; cursor: not-allowed; }
+.strip-waiting { height: 72px; background: var(--nested); border-style: none; }
+
+.strip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.strip-symbol { font-size: 13px; font-weight: 500; }
+.strip-change { font-size: 11px; }
+.strip-last { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* A day of hourly closes, scaled to its own range: a 1% day on an 80,000
+   price is invisible against a zero baseline. */
+.strip-spark { display: block; width: 100%; height: 26px; margin: 1px -8px 0; }
+.strip-spark-none { display: block; height: 27px; }
+.strip-spark polyline { fill: none; stroke: currentColor; stroke-width: 1.25; vector-effect: non-scaling-stroke; }
+.strip-spark polygon { fill: currentColor; opacity: 0.12; stroke: none; }
+.strip-spark { color: var(--meta); }
+.strip-spark.up { color: var(--ok); }
+.strip-spark.down { color: var(--no); }
+.ladder-facts dd .dot-private,
+.ladder-facts dd .dot-overridden,
+.ladder-facts dd .dot-open { display: inline-block; vertical-align: 1px; }
+
+/* ---------------------------------------------------------- the chart */
+
+.chart-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.chart-res { border-radius: 5px; }
+.chart-res .seg-item { min-height: 26px; padding: 0 9px; font-size: 12px; }
+.chart-ohlc { display: flex; flex-wrap: wrap; gap: 0 12px; margin: 0; font-size: 12px; }
+.chart-ohlc > span { display: inline-flex; gap: 4px; }
+.chart-ohlc .num { font-variant-numeric: tabular-nums; }
+.chart-clock { font-variant-numeric: tabular-nums; }
+.chart-empty { height: 430px; display: grid; place-items: center; }
+
+/* The drawing stretches; the labels beside it do not. */
+.chart-plot { position: relative; padding-right: 62px; }
+.chart-svg { display: block; width: 100%; height: 430px; }
+.chart-grid { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-wick { stroke: currentColor; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-body, .chart-vol { fill: currentColor; }
+.chart-vol { opacity: 0.35; }
+.chart-svg g.up { color: var(--ok); }
+.chart-svg g.down { color: var(--no); }
+/* Where the market is now, and where this session got in. */
+.chart-cross { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart-last { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.chart-entry { stroke: var(--hue); stroke-width: 1; stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
+
+.chart-axis { position: absolute; top: 0; right: 0; width: 58px; height: 430px; }
+.chart-axis > span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--meta);
+  font-variant-numeric: tabular-nums;
+}
+.chart-axis-last { color: var(--ink); background: var(--nested); border-radius: 3px; padding: 0 4px; }
+.chart-times { position: relative; height: 16px; margin-right: 62px; }
+.chart-times > span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chart-times > span:first-child { transform: none; }
+.chart-times > span:last-child { transform: translateX(-100%); }
+
+/* --------------------------------------------------------- the ticket */
+
+/* The only control in the product that carries a colour, because the side
+   of a trade IS the data: everything below it changes meaning with it. */
+.tw-sides { display: flex; width: 100%; margin-bottom: 12px; }
+.tw-sides .seg-item { flex: 1; min-height: 36px; font-weight: 500; }
+.tw-sides .seg-item[data-side='buy'][aria-pressed='true'] { background: var(--ok); color: #06240f; }
+.tw-sides .seg-item[data-side='sell'][aria-pressed='true'] { background: var(--no); color: #2a0b0b; }
+
+.tw-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--rule); margin-bottom: 12px; }
+.tw-tab {
+  padding: 0 0 7px;
+  border: 0;
+  background: none;
+  color: var(--meta);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tw-tab[aria-pressed='true'] { color: var(--ink); border-bottom-color: var(--ink); }
+
+.tw-have { margin: 0 0 12px; }
+.tw-have > div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+.tw-have dt { color: var(--meta); font-size: 13px; }
+.tw-have dd { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.tw-input { margin-bottom: 10px; }
+.tw-input > label { display: block; margin-bottom: 5px; font-size: 13px; color: var(--meta); }
+.tw-input .input-unit { max-width: none; }
+.tw-mid {
+  border: 0;
+  background: none;
+  color: var(--hue);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tw-send { flex: 1; white-space: nowrap; }
+.tw-send.buy { background: var(--ok); color: #06240f; }
+.tw-send.sell { background: var(--no); color: #2a0b0b; }
+
+.tw-costs { margin: 14px 0 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
+.tw-costs > div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.tw-costs dt { color: var(--meta); font-size: 12px; }
+.tw-costs dd { margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* What a live run will refuse, listed where it is read before trying. */
+.live-gaps { list-style: none; margin: 8px 0 0; padding: 0; }
+.live-gaps li {
+  padding: 5px 0 5px 12px;
+  border-left: 2px solid var(--hue);
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* The panel the top bar hangs, reachable from every state. */
+.bar-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.bar-connection:hover { border-color: var(--rule); }
+.bar-connection[aria-expanded='true'] { background: var(--nested); border-color: var(--rule); }
+
+.popover {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  z-index: 20;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--ground);
+  padding: 14px;
+  outline: none;
+}
+.popover .net { margin-bottom: 12px; }
+.popover .net:last-of-type { margin-bottom: 0; }
+.popover .actions { margin-top: 12px; }
+.app { position: relative; }
+.bar-refusals {
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--hue);
+  color: var(--ground);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
