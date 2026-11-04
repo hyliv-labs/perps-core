@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.local
+.env.example
 *.log
 .DS_Store
 spikes/out/
