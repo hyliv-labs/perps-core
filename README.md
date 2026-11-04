@@ -22,9 +22,9 @@ below is from that run.
 | 1Click swap settled | 11.997192 USDC | `0xcbef4d9e7a67a320a396ddc96891ee5d9792757d3abf39e73ab9533edbff2ce5` |
 | Deposit to Lighter | 11.900000 USDC, gas **0.011813 USDC** | `0x08c7f304481482d587db88796f7423af0f0b41909d5eb53ff492db9678cf86f8` |
 | Lighter account created | index **766821** | by the deposit itself, not a signup |
-| API key registered | first live WASM signature | `782fc8744fe048d5…` |
-| ETH perp opened | 0.005 @ $2,320.81 | `e2b45b060c70031a…` |
-| Position flattened | reduce-only, positions `[]` | `614d7918be5a8482…` |
+| API key registered | first live WASM signature | `782fc8744fe048d5292ed4d10ff4a3922aebc15c80fd36d098eb19ec9152cd0c0101e54bda9ed1df` |
+| ETH perp opened | 0.005 @ $2,320.81 | `e2b45b060c70031ae88347e2a76c9f102157bda8d8133bde29070c6624f2fce0790d7dbd3cb243cc` |
+| Position flattened | reduce-only, positions `[]` | `614d7918be5a8482f95c209c60feeaf3c16fca1a526583a7a888532661bc08a785c9756289b6e0d1` |
 
 The ZEC was sent to the 1Click deposit address
 `t1dmpdr8jfbxiuwZu8uCPtLBAxq67ZrPQdP`, with refunds pointed at a shielded
@@ -190,6 +190,14 @@ the injected object:
   answers questions no amount of further building will: whether the vault
   step is understood, whether the exit delay is tolerable, and whether the
   manual Zcash send is a wall or a shrug.
+- **Security-test the whole flow.** The parts that would hurt are known and
+  specific: key derivation and the vault, the journal that is supposed to make
+  every effect safe to repeat, the checker that gates each movement, and the
+  hash pinning on a WebAssembly signer fetched at runtime. Each needs
+  adversarial testing rather than the unit tests it has now — a crash injected
+  at every journal point, a tampered signer, a checker asked to approve a
+  movement it should refuse. The privacy claims need a reader who is trying to
+  break them, not confirm them.
 - Run `/gate` against a live Nym tunnel and record which venues accept mixnet
   traffic.
 - Publish the complete round trip end to end with its transaction hashes.
